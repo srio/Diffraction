@@ -10,10 +10,13 @@ import numpy
 #
 #inputs (in SI units)
 #
-wavelength = 1e-10 # 500e-9 # 1e-10
-distance = 1.0
-aperture_diameter = 1e-6 # 1e-3 # 1e-6
+# wavelength = 1e-10 # 500e-9 # 1e-10
+# distance = 1.0
+# aperture_diameter = 1e-6 # 1e-3 # 1e-6
 
+wavelength = 5000e-10 # 500e-9 # 1e-10
+distance = 1.0
+aperture_diameter = 500e-6 # 1e-3 # 1e-6
 
 
 sin_theta = 1.22*wavelength/aperture_diameter
@@ -56,8 +59,8 @@ plt.xlabel("theta")
 plt.ylabel("I/Io")
 
 plt.figure(3)
-plt.plot(sin_theta_array*distance*1e3,I_vs_theta)
-plt.xlabel("x [mm]")
+plt.plot(sin_theta_array*distance,I_vs_theta)
+plt.xlabel("x [m]")
 plt.ylabel("I/Io")
 plt.show()
 

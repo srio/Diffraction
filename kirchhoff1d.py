@@ -26,10 +26,22 @@ def goFromTo(source,image,distance=1.0,lensF=None,wavelength=1e-10):
     return numpy.exp(1.j * wavenumber *  r)
 
 if __name__ == '__main__':
-    
-    wavelength   =   1e-10
-    sourcesize   =   10e-6
-    detsize = 0.8e-3
+
+    # wavelength   =   1e-10
+    # sourcesize   =   10e-6
+    # detsize = 0.8e-3
+    # #wavelength   =   500e-9
+    # #sourcesize   =   1e-3
+    # #detsize = 4e-3
+    #
+    # sourcepoints = 1000
+    # detpoints =  1000
+    # distance =   1.00
+    # lensF        =   None
+
+    wavelength   =   5000e-10
+    sourcesize   =   500e-6
+    detsize = 0.008
     #wavelength   =   500e-9
     #sourcesize   =   1e-3
     #detsize = 4e-3

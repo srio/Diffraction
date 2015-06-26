@@ -14,7 +14,7 @@ wavelength        = 1e-10
 npixels           = 1024 
 pixelsize         = 0.01e-6
 aperture_type     = 1    # 0=circular, 1=Gaussian
-aperture_diameter = 1e-6 # if Gaussian, aperture_diameter = 2.35*sigma
+aperture_diameter = 50e-6 # if Gaussian, aperture_diameter = 2.35*sigma
 
 
 #
