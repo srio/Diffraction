@@ -1,8 +1,15 @@
-#
-#calculates Fraunhoffer diffraction (via Fourier Transform)
-#
-# (c) srio@esrf.eu 20150624
-#
+"""
+
+
+fraunhofer.py: calculates 2D Fraunhofer diffraction  (via Fourier Transform)
+
+
+"""
+
+__author__ = "Manuel Sanchez del Rio"
+__contact__ = "srio@esrf.eu"
+__copyright = "ESRF, 2015"
+
 
 import numpy as np
  
@@ -10,11 +17,13 @@ import numpy as np
 # inputs (in SI)
 #
 
-wavelength        = 1e-10
-npixels           = 1024 
-pixelsize         = 0.01e-6
-aperture_type     = 1    # 0=circular, 1=Gaussian
-aperture_diameter = 50e-6 # if Gaussian, aperture_diameter = 2.35*sigma
+wavelength        = 1.24e-10
+aperture_diameter = 40e-6 # if Gaussian, aperture_diameter = 2.35*sigma
+
+pixelsize         = 1e-6
+npixels           = 1024
+
+aperture_type     = 0    # 0=circular, 1=Gaussian
 
 
 #
@@ -69,6 +78,29 @@ x_over_pi = x / np.pi
 # range of validity
 #
 print("Fraunhoffer diffraction valid for distances > > a^2/lambda = %f m"%((aperture_diameter/2)**2/wavelength))
+
+ 
+
+#
+#CALCULATE fwhm 's
+#
+IntensityH = np.abs(F2[int(npixels/2),:])**2 # horizontal profile
+tt = np.where(IntensityH>=max(IntensityH)*0.5)
+if IntensityH[tt].size > 1:
+    binSize = freq[1]-freq[0]
+    FWHM_theta = binSize*(tt[0][-1]-tt[0][0])
+    print("FWHM of intensity pattern: %f rad"%FWHM_theta)
+
+    ImageH = np.abs(image[int(npixels/2),:])**2
+    tt = np.where(ImageH>=max(ImageH)*0.5)
+    if ImageH[tt].size > 1:
+        FWHM_x = pixelsize*(tt[0][-1]-tt[0][0])
+        print("FWHM of original aperture: %f m"%FWHM_x)
+        print("lambda/(FWHMx FWHMtheta): %15.10f"%(wavelength/(FWHM_theta*FWHM_x)))
+        print("lambda/(SIGMAx SIGMAtheta): %15.10f"%(wavelength/(FWHM_theta*FWHM_x/2.35/2.35)))
+
+
+
 #
 #make plots
 #
@@ -78,32 +110,19 @@ import matplotlib.pylab as plt
 # Now plot up both
 plt.figure(1)
 plt.clf()
-plt.imshow(  image , cmap=plt.cm.Greys)
+plt.imshow(  image , extent=[1e6*freq[0],1e6*freq[-1],1e6*freq[0],1e6*freq[-1]], cmap=plt.cm.Greys)
+plt.title("aperture intensity")
+plt.xlabel("X [um]")
+plt.ylabel("Z [um]")
 plt.colorbar()
- 
+
 plt.figure(2)
 plt.clf()
-plt.imshow( np.abs(F2) )
+plt.imshow( np.abs(F2), extent=[1e6*freq[0],1e6*freq[-1],1e6*freq[0],1e6*freq[-1]], )
+plt.title("diffracted intensity")
+plt.xlabel("X [um]")
+plt.ylabel("Z [um]")
 plt.colorbar()
- 
-# horizontal profiles
-IntensityH = np.abs(F2[int(npixels/2),:])**2
-#CALCULATE fwhm
-tt = np.where(IntensityH>=max(IntensityH)*0.5)
-if IntensityH[tt].size > 1:
-    binSize = freq[1]-freq[0]
-    FWHM_theta = binSize*(tt[0][-1]-tt[0][0])
-print("FWHM of intensity pattern: %f rad"%FWHM_theta)
-
-ImageH = np.abs(image[int(npixels/2),:])**2
-#CALCULATE fwhm
-tt = np.where(ImageH>=max(ImageH)*0.5)
-if ImageH[tt].size > 1:
-    FWHM_x = pixelsize*(tt[0][-1]-tt[0][0])
-print("FWHM of original aperture: %f m"%FWHM_x)
-print("lambda/(FWHMx FWHMtheta): %15.10f"%(wavelength/(FWHM_theta*FWHM_x)))
-print("lambda/(SIGMAx SIGMAtheta): %15.10f"%(wavelength/(FWHM_theta*FWHM_x/2.35/2.35)))
-
 
 plt.figure(3)
 plt.clf()
@@ -112,11 +131,12 @@ if aperture_type == 0: #circular, also display analytical values
     x = (2*np.pi/wavelength) * (aperture_diameter/2) * freq
     U_vs_theta = 2*jv(1,x)/x 
     I_vs_theta = U_vs_theta**2 * IntensityH.max()
-    plt.plot( freq, IntensityH, '-', freq , I_vs_theta, '.' )
+    plt.plot( freq*1e6, IntensityH, '-', freq*1e6 , I_vs_theta, '.' )
 elif aperture_type == 1: #Gaussian
-    plt.plot( freq, IntensityH)
+    plt.plot( freq*1e6, IntensityH)
 
-plt.xlabel('sin(theta) ~ theta [rad]')
+plt.title("Horizontal profile of diffracted intensity")
+plt.xlabel('theta [urad]')
 plt.ylabel('Diffracted intensity [a.u.]')
  
 plt.show()

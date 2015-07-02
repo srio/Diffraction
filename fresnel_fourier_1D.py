@@ -2,7 +2,7 @@
 
 
 fresnel_fourier_1D.py: calculates 1D fresnel diffraction via convolution by Fourier transform
- 
+
 
 """
 
@@ -10,30 +10,37 @@ __author__ = "Manuel Sanchez del Rio"
 __contact__ = "srio@esrf.eu"
 __copyright = "ESRF, 2015"
 
+
 import numpy
 
 if __name__ == '__main__':
 
 
-    wavelength   =   5000e-10
-    sourcesize   =   500e-6
-    detsize = 8000e-6
+    # wavelength   =   5000e-10
+    # aperture_diameter   =   500e-6
+    # detector_size = 8000e-6
+    # distance =   1.00e0
 
 
-    npoints = 100
-    #detpoints =  1000
-    distance =   1.00e0
+
+    wavelength = 1.24e-10 # 10keV
+    aperture_diameter = 40e-6 # 1e-3 # 1e-6
+    detector_size = 800e-6
+    distance = 3.6
+
+    npoints = 1000
+
     lensF        =   None
     
-    position_x = numpy.linspace(-detsize/2,detsize/2,npoints)
+    position_x = numpy.linspace(-detector_size/2,detector_size/2,npoints)
     xoffset = position_x[0]
     xdelta = position_x[1] - position_x[0]
     xsize = npoints
 
 
     fields1 = numpy.ones(npoints) + 0j
-    fields1[numpy.where(position_x < -0.5*sourcesize)] = 0.0
-    fields1[numpy.where(position_x >  0.5*sourcesize)] = 0.0
+    fields1[numpy.where(position_x < -0.5*aperture_diameter)] = 0.0
+    fields1[numpy.where(position_x >  0.5*aperture_diameter)] = 0.0
 
     #apply ideal lens
     if 0:
@@ -56,32 +63,43 @@ if __name__ == '__main__':
     #propagate
     wfou_fft *= numpy.exp(-1j * numpy.pi * wavelength * distance * wfou_fft_x**2 )
 
-    #back fft
+    #back FT
     fields2 = numpy.fft.ifft(wfou_fft)
 
     fieldIntensity = numpy.abs(fields2)**2
     fieldPhase = numpy.arctan2(numpy.real(fields2), \
                                numpy.imag(fields2))
-    #plots
-    from matplotlib import pylab as plt
-
-    plt.figure(1)
-    plt.plot(position_x,fieldIntensity)
-
-    plt.xlabel="Z [m]"
-    plt.ylabel="Intensity [a.u.]"
-    plt.title="Source "
-    plt.show()
 
     #
     # write spec formatted file
     #
     out_file = "fresnel_fourier_1D.spec"
     f = open(out_file, 'w')
-    header="#F %s \n\n#S  1 kirchhoff \n#N 3 \n#L Z[m]  intensity  phase\n"%out_file
+    header="#F %s \n\n#S  1 fresnel diffraction \n#N 3 \n#L X[m]  intensity  phase\n"%out_file
     f.write(header)
     for i in range(len(position_x)):
         out = numpy.array((position_x[i],  fieldIntensity[i],fieldPhase[i]))
         f.write(("%20.11e "*out.size+"\n") % tuple( out.tolist()))
     f.close()
     print ("File written to disk: %s"%out_file)
+
+    #plots
+
+
+    from matplotlib import pylab as plt
+    from scipy.special import jv
+    sin_theta = position_x / distance
+    x = (2*numpy.pi/wavelength) * (aperture_diameter/2) * sin_theta
+    U_vs_theta = 2*jv(1,x)/x
+    I_vs_theta = U_vs_theta**2 * fieldIntensity.max()
+
+
+    plt.figure(1)
+
+    plt.plot(position_x*1e6,fieldIntensity,'-',position_x*1e6,I_vs_theta,)
+    plt.title("Fresnel Diffraction")
+    plt.xlabel("X [um]")
+    plt.ylabel("Intensity [a.u.]")
+    plt.show()
+
+

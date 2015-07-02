@@ -28,31 +28,38 @@ def goFromTo(source,image,distance=1.0,lensF=None,wavelength=1e-10):
 if __name__ == '__main__':
 
     # wavelength   =   1e-10
-    # sourcesize   =   10e-6
-    # detsize = 0.8e-3
+    # aperture_diameter   =   10e-6
+    # detector_size = 0.8e-3
     # #wavelength   =   500e-9
-    # #sourcesize   =   1e-3
-    # #detsize = 4e-3
+    # #aperture_diameter   =   1e-3
+    # #detector_size = 4e-3
     #
     # sourcepoints = 1000
     # detpoints =  1000
     # distance =   1.00
     # lensF        =   None
 
-    wavelength   =   5000e-10
-    sourcesize   =   500e-6
-    detsize = 0.008
+    # wavelength   =   5000e-10
+    # sourcesize   =   500e-6
+    # detector_size = 0.008
     #wavelength   =   500e-9
-    #sourcesize   =   1e-3
-    #detsize = 4e-3
+    #aperture_diameter   =   1e-3
+    #detector_size = 4e-3
+
+    wavelength = 1.24e-10 # 10keV
+    aperture_diameter = 40e-6 # 1e-3 # 1e-6
+    detector_size = 800e-6
+    distance = 3.6
+
 
     sourcepoints = 1000
     detpoints =  1000
-    distance =   1.00
     lensF        =   None
+
+    sourcesize = aperture_diameter
     
     position1x = numpy.linspace(-sourcesize/2,sourcesize/2,sourcepoints)
-    position2x = numpy.linspace(-detsize/2,detsize/2,detpoints)
+    position2x = numpy.linspace(-detector_size/2,detector_size/2,detpoints)
     
     fields12 = goFromTo(position1x,position2x,distance, \
         lensF=lensF,wavelength=wavelength)
@@ -65,33 +72,32 @@ if __name__ == '__main__':
     fieldIntensity = numpy.power(numpy.abs(fieldComplexAmplitude),2)
     fieldPhase = numpy.arctan2(numpy.real(fieldComplexAmplitude), \
                                numpy.imag(fieldComplexAmplitude))
-    
-    #plots
-    from matplotlib import pylab as plt
 
-    plt.figure(1)
-    plt.plot(position2x,fieldIntensity)
-
-    plt.xlabel="Z [m]"
-    plt.ylabel="Intensity [a.u.]"
-    plt.title="Coherent source "
-    plt.show()
 
     #
     # write spec formatted file
     #
+    out_file = "fresnel_kirchhoff_1D.spec"
+    f = open(out_file, 'w')
+    header="#F %s \n\n#S  1 fresnel-kirchhoff diffraction integral\n#N 3 \n#L X[m]  intensity  phase\n"%out_file
 
-    f = open('kirchhoff.spec', 'w')
-
-    header="#F kirchhoff.spec \n\n#S  1 kirchhoff \n#N 3 \n"+\
-           "#L Z[m]  intensityCoh  phaseCoh\n"
     f.write(header)
     
     for i in range(detpoints):
-       out = numpy.array((position2x[i],  fieldIntensity[i], \
-              fieldPhase[i]))
+       out = numpy.array((position2x[i], fieldIntensity[i], fieldPhase[i]))
        f.write( ("%20.11e "*out.size+"\n") % tuple( out.tolist())  )
     
     f.close()
-    print ("File written to disk: kirchhoff.spec")
+    print ("File written to disk: %s"%out_file)
 
+    #
+    #plots
+    #
+    from matplotlib import pylab as plt
+
+    plt.figure(1)
+    plt.plot(position2x*1e6,fieldIntensity)
+    plt.title("Fresnel-Kirchhoff Diffraction")
+    plt.xlabel("X [um]")
+    plt.ylabel("Intensity [a.u.]")
+    plt.show()
