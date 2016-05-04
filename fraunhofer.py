@@ -57,6 +57,68 @@ def wavefront_aperture(p_x,p_y,amplitude,diameter=40e-6,type=0):
 #
 # tools
 #
+def propagator2d(x,y,z,method="fraunhofer",wavelength=1e-10,propagation_distance=1.0,return_angles=0):
+    #
+    # interface to different propagators
+    #
+
+    if method == "fraunhofer":
+        x1,y1,z1 = propagator2d_fraunhoffer(x,y,z,wavelength=wavelength)
+        if return_angles:
+            return x1,y1,z1
+        else:
+            return x1*propagation_distance,y1*propagation_distance,z1
+    elif method == "fourier_convolution":
+        x1,y1,z1 = propagator2d_fourier_convolution(x,y,z,propagation_distance=propagation_distance,wavelength=wavelength)
+        if return_angles:
+            return x1/propagation_distance,y1/propagation_distance,z1
+        else:
+            return x1,y1,z1
+    else:
+        raise Exception("method %s not implemented"%method)
+
+def propagator2d_fourier_convolution(p_x,p_y,image,propagation_distance=1.0,wavelength=1e-10):
+
+    #
+    #compute Fourier transform
+    #
+
+    # F1 = np.fft.fft2(image)  # Take the fourier transform of the image.
+    # Now shift the quadrants around so that low spatial frequencies are in
+    # the center of the 2D fourier transformed image.
+    # F2 = np.fft.fftshift( F1 )
+    fft_scale = np.fft.fftfreq( p_x.size ) / (p_x[1] - p_x[0])
+    print(">>>>>>>>>>>>> shape scale: ",fft_scale.shape)
+
+    p_xy = np.array(np.meshgrid(p_x,p_y))
+
+
+    fft = np.fft.fft2(image)
+    print(">>>>>>>>>>>>> shape image fft p_xy: ",image.shape,fft.shape,p_xy)
+    # fft *= np.exp((-1.0j) * np.pi * wavelength * propagation_distance * fft_scale**2)
+    fft *= np.exp((-1.0j) * np.pi * wavelength * (p_xy[0]*p_xy[0] + p_xy[1]*p_xy[1]) )
+    ifft = np.fft.ifft2(fft)
+
+    # # frequency for axis 1
+    # pixelsize = p_x[1] - p_x[0]
+    # npixels = p_x.size
+    # freq_nyquist = 0.5/pixelsize
+    # freq_n = np.linspace(-1.0,1.0,npixels)
+    # freq = freq_n * freq_nyquist
+    # freq = freq * wavelength
+    #
+    # # frequency for axis 2
+    # pixelsize = p_y[1] - p_y[0]
+    # npixels = p_y.size
+    # freq_nyquist = 0.5/pixelsize
+    # freq_n = np.linspace(-1.0,1.0,npixels)
+    # freq_y = freq_n * freq_nyquist
+    # freq_y = freq_y * wavelength
+
+    return p_x.copy(),p_y.copy(),ifft
+
+
+
 
 def propagator2d_fraunhoffer(p_x,p_y,image,wavelength=1e-10):
     """
@@ -117,6 +179,12 @@ def line_fwhm(line):
 #
 # plotting tools
 #
+def plot_show():
+
+    import matplotlib.pylab as plt
+
+    plt.show()
+
 def plot_image(mymode,theta,psi,title="TITLE",xtitle=r"X [$\mu m$]",ytitle=r"Y [$\mu m$]",cmap=None,show=1):
 
     import matplotlib.pylab as plt
@@ -221,11 +289,17 @@ if __name__ == "__main__":
     #
     # Fraunhoffer propagation
     #
-    angle_x, angle_y, amplitude_propagated = propagator2d_fraunhoffer(p_x,p_y,amplitude,wavelength=wavelength)
-    print("Fraunhoffer diffraction valid for distances > > a^2/lambda = %f m"%((aperture_diameter/2)**2/wavelength))
+    # method = "fourier_convolution"
+    method = "fraunhofer"
+
+    angle_x, angle_y, amplitude_propagated = propagator2d(p_x,p_y,amplitude,method=method,wavelength=wavelength)
+
+    # angle_x, angle_y, amplitude_propagated = propagator2d_fraunhoffer(p_x,p_y,amplitude,wavelength=wavelength)
+    if method == "fraunhofer":
+        print("Fraunhoffer diffraction valid for distances > > a^2/lambda = %f m"%((aperture_diameter/2)**2/wavelength))
 
     plot_image(np.abs(amplitude_propagated)**2,angle_x*1e6,angle_y*1e6, show=0,
-               title="Diffracted intensity",xtitle="X [urad]",ytitle="Y [urad]")
+               title="Diffracted intensity (%s)"%method,xtitle="X [urad]",ytitle="Y [urad]")
 
     #
     # extract profiles and calculate theoretical ones
@@ -247,19 +321,31 @@ if __name__ == "__main__":
         U_vs_theta_y = 2*jv(1,y)/y
         I_vs_theta_x = U_vs_theta_x**2
         I_vs_theta_y = U_vs_theta_y**2
-        print("HORIZONTAL FWHM Fraunhoffer : %f rad, FWHM Airy: %f urad, 1.22*wavelength/Diameter: %f urad"%(
-            line_fwhm(horizontal_intensity_profile)*1e6*(angle_x[1]-angle_x[0]),
-            line_fwhm(I_vs_theta_x)*1e6*(angle_x[1]-angle_x[0]),
-            1e6*1.22*wavelength/aperture_diameter))
-        print("VERTICAL FWHM Fraunhoffer : %f rad, FWHM Airy: %f urad, 1.22*wavelength/Diameter: %f urad"%(
-            line_fwhm(vertical_intensity_profile)*1e6*(angle_y[1]-angle_y[0]),
-            line_fwhm(I_vs_theta_y)*1e6*(angle_y[1]-angle_y[0]),
-            1e6*1.22*wavelength/aperture_diameter))
     elif aperture_type == 1: #Gaussian
         sigma = aperture_diameter/2.35
         sigma_ft = 1.0 / sigma * wavelength / (4.0 * np.pi)
         I_vs_theta_x = np.exp( -(angle_x**2/sigma_ft**2/2) )
         I_vs_theta_y = np.exp( -(angle_y**2/sigma_ft**2/2) )
+
+    fwhm_intensity_profile_horizontal = line_fwhm(horizontal_intensity_profile) * (angle_x[1]-angle_x[0])
+    fwhm_intensity_profile_vertical = line_fwhm(vertical_intensity_profile) * (angle_y[1]-angle_y[0])
+    fwhm_theoretical_profile_horizontal = line_fwhm(I_vs_theta_x) * (angle_x[1]-angle_x[0])
+    fwhm_theoretical_profile_vertical = line_fwhm(I_vs_theta_y) * (angle_y[1]-angle_y[0])
+
+    #
+    # calculate widths
+    #
+    print("HORIZONTAL FWHM (%s) : %f rad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
+        method,
+        1e6*fwhm_intensity_profile_horizontal,1e6*fwhm_theoretical_profile_horizontal,1e6*1.22*wavelength/aperture_diameter))
+    print("VERTICAL FWHM (%s) : %f rad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
+        method,
+        1e6*fwhm_intensity_profile_vertical,1e6*fwhm_theoretical_profile_vertical,1e6*1.22*wavelength/aperture_diameter))
+    print("HORIZONTAL (4pi/lambda) sigma sigma' : (%s): %f, theoretical: %f "%(method,
+        4*np.pi / wavelength * fwhm_intensity_profile_horizontal/2.35 * aperture_diameter/2.35,
+        4*np.pi / wavelength * fwhm_theoretical_profile_horizontal/2.35 * aperture_diameter/2.35  ))
+
+
 
     # plot profiles
     plot( angle_x*1e6, horizontal_intensity_profile, angle_x*1e6, I_vs_theta_x, show=0,
