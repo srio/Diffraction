@@ -83,41 +83,32 @@ def propagator2d_fourier_convolution(p_x,p_y,image,propagation_distance=1.0,wave
     #compute Fourier transform
     #
 
-    # F1 = np.fft.fft2(image)  # Take the fourier transform of the image.
-    # Now shift the quadrants around so that low spatial frequencies are in
-    # the center of the 2D fourier transformed image.
-    # F2 = np.fft.fftshift( F1 )
-    fft_scale = np.fft.fftfreq( p_x.size ) / (p_x[1] - p_x[0])
-    print(">>>>>>>>>>>>> shape scale: ",fft_scale.shape)
-
-    p_xy = np.array(np.meshgrid(p_x,p_y))
-
 
     fft = np.fft.fft2(image)
-    print(">>>>>>>>>>>>> shape image fft p_xy: ",image.shape,fft.shape,p_xy)
-    # fft *= np.exp((-1.0j) * np.pi * wavelength * propagation_distance * fft_scale**2)
-    fft *= np.exp((-1.0j) * np.pi * wavelength * (p_xy[0]*p_xy[0] + p_xy[1]*p_xy[1]) )
-    ifft = np.fft.ifft2(fft)
 
-    # # frequency for axis 1
-    # pixelsize = p_x[1] - p_x[0]
-    # npixels = p_x.size
-    # freq_nyquist = 0.5/pixelsize
-    # freq_n = np.linspace(-1.0,1.0,npixels)
-    # freq = freq_n * freq_nyquist
+    # frequency for axis 1
+    pixelsize = p_x[1] - p_x[0]
+    npixels = p_x.size
+    freq_nyquist = 0.5/pixelsize
+    freq_n = np.linspace(-1.0,1.0,npixels)
+    freq = freq_n * freq_nyquist
     # freq = freq * wavelength
-    #
-    # # frequency for axis 2
-    # pixelsize = p_y[1] - p_y[0]
-    # npixels = p_y.size
-    # freq_nyquist = 0.5/pixelsize
-    # freq_n = np.linspace(-1.0,1.0,npixels)
-    # freq_y = freq_n * freq_nyquist
+
+    # frequency for axis 2
+    pixelsize = p_y[1] - p_y[0]
+    npixels = p_y.size
+    freq_nyquist = 0.5/pixelsize
+    freq_n = np.linspace(-1.0,1.0,npixels)
+    freq_y = freq_n * freq_nyquist
     # freq_y = freq_y * wavelength
 
+    freq_xy = np.array(np.meshgrid(freq,freq_y))
+
+    fft *= np.exp((-1.0j) * np.pi * wavelength * propagation_distance *
+                  np.fft.fftshift(freq_xy[0]*freq_xy[0] + freq_xy[1]*freq_xy[1]) )
+    ifft = np.fft.ifft2(fft)
+
     return p_x.copy(),p_y.copy(),ifft
-
-
 
 
 def propagator2d_fraunhoffer(p_x,p_y,image,wavelength=1e-10):
@@ -173,7 +164,9 @@ def line_fwhm(line):
     if line[tt].size > 1:
         # binSize = x[1]-x[0]
         FWHM = (tt[0][-1]-tt[0][0])
-    return FWHM
+        return FWHM
+    else:
+        return -1
 
 
 #
@@ -272,6 +265,7 @@ if __name__ == "__main__":
     npixels_x = 1024
     npixels_y = npixels_x
 
+    propagation_distance = 30.0
 
     #
     # calculations
@@ -292,7 +286,8 @@ if __name__ == "__main__":
     # method = "fourier_convolution"
     method = "fraunhofer"
 
-    angle_x, angle_y, amplitude_propagated = propagator2d(p_x,p_y,amplitude,method=method,wavelength=wavelength)
+    angle_x, angle_y, amplitude_propagated = propagator2d(p_x,p_y,amplitude,method=method,wavelength=wavelength,
+                                        propagation_distance=propagation_distance,return_angles=1)
 
     # angle_x, angle_y, amplitude_propagated = propagator2d_fraunhoffer(p_x,p_y,amplitude,wavelength=wavelength)
     if method == "fraunhofer":
@@ -335,10 +330,10 @@ if __name__ == "__main__":
     #
     # calculate widths
     #
-    print("HORIZONTAL FWHM (%s) : %f rad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
+    print("HORIZONTAL FWHM (%s) : %f urad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
         method,
         1e6*fwhm_intensity_profile_horizontal,1e6*fwhm_theoretical_profile_horizontal,1e6*1.22*wavelength/aperture_diameter))
-    print("VERTICAL FWHM (%s) : %f rad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
+    print("VERTICAL FWHM (%s) : %f urad, FWHM theoretical: %f urad, 1.22*wavelength/Diameter: %f urad"%(
         method,
         1e6*fwhm_intensity_profile_vertical,1e6*fwhm_theoretical_profile_vertical,1e6*1.22*wavelength/aperture_diameter))
     print("HORIZONTAL (4pi/lambda) sigma sigma' : (%s): %f, theoretical: %f "%(method,
