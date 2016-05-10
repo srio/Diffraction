@@ -30,7 +30,7 @@ def wavefront_initialize(pixelsize_h=1e-6,pixelsize_v=1e-6,npixels_h=1024,npixel
     return p_x,p_y,amplitude
 
 def wavefront_aperture(p_x,p_y,amplitude,diameter=40e-6,type=0):
-    # aperture_type: 0=circular, 1=Gaussian
+    # aperture_type: 0=circular, 1=Square, 2=Gaussian
     p_xx = p_x[:, np.newaxis]
     p_yy = p_y[np.newaxis, :]
 
@@ -43,12 +43,21 @@ def wavefront_aperture(p_x,p_y,amplitude,diameter=40e-6,type=0):
             print("Warning: wavefront_aperture(): Nothing goes trough the aperture")
         else:
             filter[filter_illuminated_indices] = 1.0
-    elif type == 1:  # Gaussian
+    elif type == 1:  # square
+        radius = (diameter/2)
+        print("radius=%f um"%(1e6*radius))
+        filter_illuminated_indices = np.where( (np.abs(p_xx) < radius) & (np.abs(p_yy) < radius))
+        if filter_illuminated_indices[0].size ==0:
+            print("Warning: wavefront_aperture(): Nothing goes trough the aperture")
+        else:
+            filter[filter_illuminated_indices] = 1.0
+    elif type == 2:  # Gaussian
         sigma = diameter/2.35
         print("sigma=%f um"%(1e6*sigma))
         rho2 = p_xx**2 + p_yy**2
         #TODO: add Gaussian amplitude
         filter = np.sqrt(np.exp(-rho2/2/sigma**2)) # Gaussian in intensity, so srrt for amplitude
+
     else:
         raise ValueError("Aperture type (shape) not valid")
 
@@ -61,7 +70,6 @@ def propagator2d(x,y,z,method="fraunhofer",wavelength=1e-10,propagation_distance
     #
     # interface to different propagators
     #
-
     if method == "fraunhofer":
         x1,y1,z1 = propagator2d_fraunhoffer(x,y,z,wavelength=wavelength)
         if return_angles:
@@ -74,16 +82,68 @@ def propagator2d(x,y,z,method="fraunhofer",wavelength=1e-10,propagation_distance
             return x1/propagation_distance,y1/propagation_distance,z1
         else:
             return x1,y1,z1
+    elif method == "integral":
+        x1,y1,z1 = propagator2d_integral(x,y,z,propagation_distance=propagation_distance,wavelength=wavelength)
+        if return_angles:
+            return x1/propagation_distance,y1/propagation_distance,z1
+        else:
+            return x1,y1,z1
     else:
         raise Exception("method %s not implemented"%method)
 
+
+def propagator2d_integral(p_x,p_y,amplitude,propagation_distance=1.0,wavelength=1e-10,shuffle_interval=1e-5):
+    #
+    # Fresnel-Kirchhoff integral (neglecting inclination factor)
+    #
+    det_x = p_x.copy()
+    det_y = p_y.copy()
+
+    #
+    # manual
+    #
+    # p_xy = np.zeros((2,p_x.size,p_y.size))
+    # det_xy = np.zeros((2,det_x.size,det_y.size))
+    # for i in range(p_x.size):
+    #     for j in range(p_y.size):
+    #         p_xy[0,i,j] = p_x[i]
+    #         p_xy[1,i,j] = p_y[j]
+    #         det_xy[0,i,j] = det_x[i]
+    #         det_xy[1,i,j] = det_y[j]
+
+    #
+    # np
+    #
+    p_xy = np.array(np.meshgrid(p_y,p_x))
+    det_xy = np.array(np.meshgrid(det_y,det_x))
+
+
+    amplitude_propagated = np.zeros_like(amplitude,dtype='complex')
+
+    wavenumber = 2 * np.pi / wavelength
+
+
+
+    for i in range(det_x.size):
+        for j in range(det_y.size):
+            if shuffle_interval == 0:
+                rd_x = 0.0
+                rd_y = 0.0
+            else:
+                rd_x = (np.random.rand(p_x.size,p_y.size)-0.5)*shuffle_interval
+                rd_y = (np.random.rand(p_x.size,p_y.size)-0.5)*shuffle_interval
+
+            r = np.sqrt(    np.power(p_xy[0,:,:] + rd_x - det_xy[0,i,j],2) +
+                            np.power(p_xy[1,:,:] + rd_y - det_xy[1,i,j],2) +
+                            np.power(propagation_distance,2) )
+            amplitude_propagated[i,j] = (amplitude / r * np.exp(1.j * wavenumber *  r)).sum()
+
+    return det_x,det_y,amplitude_propagated # .reshape((det_x.size,det_y.size))
+
 def propagator2d_fourier_convolution(p_x,p_y,image,propagation_distance=1.0,wavelength=1e-10):
-
     #
-    #compute Fourier transform
+    # convolving with the Fresnel kernel via FFT multiplication
     #
-
-
     fft = np.fft.fft2(image)
 
     # frequency for axis 1
@@ -91,7 +151,7 @@ def propagator2d_fourier_convolution(p_x,p_y,image,propagation_distance=1.0,wave
     npixels = p_x.size
     freq_nyquist = 0.5/pixelsize
     freq_n = np.linspace(-1.0,1.0,npixels)
-    freq = freq_n * freq_nyquist
+    freq_x = freq_n * freq_nyquist
     # freq = freq * wavelength
 
     # frequency for axis 2
@@ -102,7 +162,7 @@ def propagator2d_fourier_convolution(p_x,p_y,image,propagation_distance=1.0,wave
     freq_y = freq_n * freq_nyquist
     # freq_y = freq_y * wavelength
 
-    freq_xy = np.array(np.meshgrid(freq,freq_y))
+    freq_xy = np.array(np.meshgrid(freq_y,freq_x))
 
     fft *= np.exp((-1.0j) * np.pi * wavelength * propagation_distance *
                   np.fft.fftshift(freq_xy[0]*freq_xy[0] + freq_xy[1]*freq_xy[1]) )
@@ -134,8 +194,8 @@ def propagator2d_fraunhoffer(p_x,p_y,image,wavelength=1e-10):
     npixels = p_x.size
     freq_nyquist = 0.5/pixelsize
     freq_n = np.linspace(-1.0,1.0,npixels)
-    freq = freq_n * freq_nyquist
-    freq = freq * wavelength
+    freq_x = freq_n * freq_nyquist
+    freq_x *= wavelength
 
     # frequency for axis 2
     pixelsize = p_y[1] - p_y[0]
@@ -143,9 +203,9 @@ def propagator2d_fraunhoffer(p_x,p_y,image,wavelength=1e-10):
     freq_nyquist = 0.5/pixelsize
     freq_n = np.linspace(-1.0,1.0,npixels)
     freq_y = freq_n * freq_nyquist
-    freq_y = freq_y * wavelength
+    freq_y *= wavelength
 
-    return freq,freq_y,F2
+    return freq_x,freq_y,F2
 
 def line_image(image,horizontal_or_vertical='H'):
     if horizontal_or_vertical == "H":
@@ -167,7 +227,6 @@ def line_fwhm(line):
         return FWHM
     else:
         return -1
-
 
 #
 # plotting tools
@@ -250,7 +309,7 @@ def plot(*positional_parameters,title="",xtitle="",ytitle="",show=1,legend=None,
     if show:
         plt.show()
 
-if __name__ == "__main__":
+def main():
     #
     # inputs (in SI)
     #
@@ -258,14 +317,18 @@ if __name__ == "__main__":
     wavelength        = 1.24e-10
 
     aperture_diameter = 40e-6 # if Gaussian, aperture_diameter = 2.35*sigma
-    aperture_type     = 0     # 0=circular, 1=Gaussian (sigma = diameter/2.35)
+    aperture_type     = 0     # 0=circular, 1=Square, 2=Gaussian (sigma = diameter/2.35)
 
     pixelsize_x = 1e-6
     pixelsize_y = pixelsize_x
-    npixels_x = 1024
-    npixels_y = npixels_x
+    npixels_x = 1024      #200 #
+    npixels_y = npixels_x #50  #
 
     propagation_distance = 30.0
+
+    # method = "fourier_convolution"
+    method = "fraunhofer"
+    # method = "integral"
 
     #
     # calculations
@@ -279,13 +342,9 @@ if __name__ == "__main__":
     plot_image(np.abs(amplitude)**2,p_x*1e6,p_y*1e6, show=0,
                title="aperture intensity, Diameter=%5.1f um"%(1e6*aperture_diameter),xtitle="X [um]",ytitle="Y [um]")
 
-
     #
-    # Fraunhoffer propagation
+    # propagation
     #
-    # method = "fourier_convolution"
-    method = "fraunhofer"
-
     angle_x, angle_y, amplitude_propagated = propagator2d(p_x,p_y,amplitude,method=method,wavelength=wavelength,
                                         propagation_distance=propagation_distance,return_angles=1)
 
@@ -316,7 +375,16 @@ if __name__ == "__main__":
         U_vs_theta_y = 2*jv(1,y)/y
         I_vs_theta_x = U_vs_theta_x**2
         I_vs_theta_y = U_vs_theta_y**2
-    elif aperture_type == 1: #Gaussian
+    elif aperture_type == 1: # square
+        x = (2*np.pi/wavelength) * (aperture_diameter/2) * angle_x
+        y = (2*np.pi/wavelength) * (aperture_diameter/2) * angle_y
+        U_vs_theta_x = 2*np.sin(x)/x
+        U_vs_theta_y = 2*np.sin(y)/y
+        I_vs_theta_x = U_vs_theta_x**2
+        I_vs_theta_y = U_vs_theta_y**2
+        I_vs_theta_x /= I_vs_theta_x.max()
+        I_vs_theta_y /= I_vs_theta_y.max()
+    elif aperture_type == 2: #Gaussian
         sigma = aperture_diameter/2.35
         sigma_ft = 1.0 / sigma * wavelength / (4.0 * np.pi)
         I_vs_theta_x = np.exp( -(angle_x**2/sigma_ft**2/2) )
@@ -349,3 +417,6 @@ if __name__ == "__main__":
     plot( angle_y*1e6, vertical_intensity_profile, angle_y*1e6, I_vs_theta_y, show=1,
           legend=["profile","theory"],color=["red","black"],
           title="Vertical profile of diffracted intensity",xtitle='theta [urad]',ytitle='Diffracted intensity [a.u.]')
+
+if __name__ == "__main__":
+    main()
